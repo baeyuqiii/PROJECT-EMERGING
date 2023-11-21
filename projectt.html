@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <meta charset="utf8">
+
+   <title>Conferencing Portal</title>
+   <link rel="stylesheet" href="https://code.s4d.io/widget-recents/production/main.css">
+   <link rel="stylesheet" href="https://code.s4d.io/widget-space/production/main.css">
+   <link rel="stylesheet" href="https://code.s4d.io/widget-scheduler/production/main.css">
+
+   <script src="https://code.s4d.io/widget-space/production/bundle.js"></script>
+   <script src="https://code.s4d.io/widget-recents/production/bundle.js"></script>
+
+   <!-- Add Toastr library for notifications -->
+   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
+   <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+
+   <!-- Add flatpickr library for date and time picking -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+
+   <style>
+      html {
+         height: 100%;
+      }
+
+      body {
+         font-family: 'Arial', sans-serif;
+         background-color: lightgoldenrodyellow; 
+         margin: 0;
+         padding: 0;
+         display: flex;
+         justify-content: center;
+         align-items: center;
+         min-height: 100vh; 
+      }
+
+      #access-token-form {
+         background-color: maroon;
+         color: #ffffff;
+         padding: 30px;
+         text-align: center;
+         font-family: Verdana, Geneva, Tahoma, sans-serif;
+         border-radius: 10px;
+      }
+
+      #access-token,
+      #meeting-date,
+      #meeting-time {
+         width: 300px;
+         padding: 10px;
+         font-size: 16px;
+         margin-bottom: 10px;
+      }
+
+      #widgets-container {
+         display: none;
+         padding: 20px;
+         font-family: Verdana, Geneva, Tahoma, sans-serif;
+      }
+
+      #recents {
+         width: 300px;
+         height: 500px;
+         float: left;
+         background-color: #ffffff; 
+         border: 1px solid #ddd; 
+         border-radius: 5px;
+         margin-right: 20px;
+      }
+
+      #space {
+         width: 750px;
+         height: 500px;
+         background-color: lightgoldenrodyellow;
+         border: 1px solid #ddd; 
+         border-radius: 5px;
+      }
+
+      #chat-box {
+         width: 300px;
+         height: 300px;
+         overflow-y: auto;
+         border: 1px solid #ddd; 
+         border-radius: 5px;
+         margin-top: 20px;
+         padding: 10px;
+      }
+
+      #chat-input {
+         width: 250px;
+         padding: 5px;
+         margin-top: 10px;
+      }
+
+      #chat-send {
+         padding: 5px;
+         margin-top: 10px;
+         cursor: pointer;
+      }
+      #scheduler {
+            flex: 1;
+            background-color: maroon;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            overflow: auto;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        #scheduling-form {
+            text-align: center;
+            padding: 20px;
+            background-color:lightgoldenrodyellow;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+   </style>
+</head>
+
+<body>
+
+   <!-- Access Token Input Form -->
+   <div id="access-token-form">
+      <label for="access-token">Enter Webex Teams Access Token :</label>
+      <br><br>
+      <input type="text" id="access-token" placeholder="Paste your token here">
+      <br><br>
+      <button onclick="setAccessToken()">Submit</button>
+   </div>
+
+   <!-- Recents and Space Widgets -->
+   <div id="widgets-container">
+      <div id="recents"></div>
+      <div id="space"></div>
+      <br><br>
+     <!-- Schedule Meeting -->
+     <div id="scheduler">
+        <div id="scheduling-form">
+            <label for="meeting-topic">Meeting Topic :</label>
+            <br><br>
+            <input type="text" id="meeting-topic" name="meeting-topic">
+            <br><br>
+            <label for="meeting-datetime">Select Meeting Date and Time:</label>
+            <br><br>
+            <input type="datetime-local" id="meeting-datetime" name="meeting-datetime">
+            <br><br>
+            <button onclick="scheduleMeeting()">Schedule Meeting</button>
+        </div>
+    </div>
+</div>
+
+
+   <script>
+      let selectedRoom;
+
+      function setAccessToken() {
+         const accessTokenInput = document.getElementById('access-token');
+         const token = accessTokenInput.value.trim();
+
+         if (token) {
+            hideAccessTokenForm();
+            initializeWidgets(token);
+         } else {
+            toastr.error('Please enter a valid access token.');
+         }
+      }
+
+      function hideAccessTokenForm() {
+         const accessTokenForm = document.getElementById('access-token-form');
+         accessTokenForm.style.display = 'none';
+
+         const widgetsContainer = document.getElementById('widgets-container');
+         widgetsContainer.style.display = 'block';
+      }
+
+      function initializeWidgets(token) {
+         // Init the Recents widget
+         const recentsElement = document.getElementById('recents');
+         webex.widget(recentsElement).recentsWidget({
+            accessToken: token,
+            onEvent: callback
+         });
+
+         function callback(type, event) {
+            if (type !== "rooms:selected") {
+               console.log("new event: " + type);
+               toastr.info('Event Received', type);
+               return;
+            }
+
+            let selectedRoom = event.data.id;
+            console.log("room " + selectedRoom + " was selected");
+
+            let spaceElement = document.getElementById('space');
+
+            // Remove existing 'Space' widget (if any)
+            try {
+               webex.widget(spaceElement).remove().then(function (removed) {
+                  if (removed) {
+                     console.log('removed!');
+                  }
+               });
+            } catch (err) {
+               console.error('could not remove Space widget :-(, continuing...');
+            }
+
+            // Inject a new 'Space' widget with the selected room
+            webex.widget(spaceElement).spaceWidget({
+               accessToken: token,
+               destinationType: "spaceId",
+               destinationId: selectedRoom,
+               activities: { "files": true, "meet": true, "message": true, "people": true },
+               initialActivity: 'message',
+               secondaryActivitiesFullWidth: false
+            });
+
+            // Initialize chat for the selected room
+            initializeChat(selectedRoom, token);
+         }
+      }
+
+      function scheduleMeeting() {
+            const meetingTopicInput = document.getElementById('meeting-topic');
+            const meetingDatetimeInput = document.getElementById('meeting-datetime');
+
+            const meetingTopic = meetingTopicInput.value.trim();
+            const meetingDatetime = meetingDatetimeInput.value;
+
+            // Use the meetingTopic and meetingDatetime for scheduling logic
+            console.log('Meeting Topic:', meetingTopic);
+            console.log('Scheduled meeting for:', meetingDatetime);
+
+            // You can perform further actions here based on the input values
+
+            // For demonstration purposes, let's display a notification
+            toastr.success('Meeting scheduled successfully!', 'Success');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Your existing DOMContentLoaded logic
+        });
+        
+
+  </script>
+  
+
+</body>
+
+</html>
